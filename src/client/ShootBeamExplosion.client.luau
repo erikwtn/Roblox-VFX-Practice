@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 --// Dependencies
+local VFXValidator = require(ReplicatedStorage.Shared.VFXValidator)
 
 --// Constants
 local Player = Players.LocalPlayer
@@ -16,13 +17,17 @@ local VFXFolder: Folder = Workspace:WaitForChild("VFX")
 local ExplosionEvent: RemoteEvent = ReplicatedStorage:WaitForChild("ShootBeamExplosionRemote")
 
 --// Variables
-local beamDuration: number = 0.5
-local beamMaximumRange: number = 100
 local explosionTweenInfo: TweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+local lastTimeUsed = 0
 
 --// Functions
 local function createBeam(origin: Part, targetPosition: Vector3)
 	if not origin or not targetPosition then
+		return
+	end
+
+	local config = VFXValidator.Config["ShootBeamExplosion"]
+	if not config then
 		return
 	end
 
@@ -47,7 +52,7 @@ local function createBeam(origin: Part, targetPosition: Vector3)
 		timeElapsed += deltaTime
 
 		-- check if timer ran out or origin stops existing, if so stop loop
-		if timeElapsed > beamDuration or not origin or not origin.Parent then
+		if timeElapsed > config.Duration or not origin or not origin.Parent then
 			connection:Disconnect()
 			beam:Destroy()
 			return
@@ -55,8 +60,8 @@ local function createBeam(origin: Part, targetPosition: Vector3)
 
 		-- calculate the size, length and transparency of the beam depending on time elapsed
 		local distance: number = (origin.Position - targetPosition).Magnitude
-		local targetTransparency: number = timeElapsed / beamDuration
-		local targetThickness: number = 0.8 * (1 - (timeElapsed / beamDuration))
+		local targetTransparency: number = timeElapsed / config.Duration
+		local targetThickness: number = 0.8 * (1 - (timeElapsed / config.Duration))
 
 		-- set the beam's size, length and transparency
 		beam.Size = Vector3.new(distance, targetThickness, targetThickness)
@@ -125,10 +130,19 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return 
 	end
 
+	if not VFXValidator.CanPerform(Player, "ShootBeamExplosion", lastTimeUsed) then
+		return
+	end
+
 	local character = Player.Character
 	local origin = character and character:FindFirstChild("Head")
 	if not origin then 
 		return 
+	end
+
+	local config = VFXValidator.Config["ShootBeamExplosion"]
+	if not config then
+		return
 	end
 
 	Mouse.TargetFilter = VFXFolder
@@ -136,8 +150,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	
 	-- clamp to range
 	local difference = (mousePos - origin.Position)
-	local targetPos = (difference.Magnitude > beamMaximumRange) and (origin.Position + difference.Unit * beamMaximumRange) or mousePos
-	
+	local targetPos = (difference.Magnitude > config.MaximumRange) and (origin.Position + difference.Unit * config.MaximumRange) or mousePos
+
+	lastTimeUsed = tick()
 	createBeam(origin, targetPos)
 	createExplosion(targetPos)
 	ExplosionEvent:FireServer(targetPos)
