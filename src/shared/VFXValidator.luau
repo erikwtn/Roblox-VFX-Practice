@@ -7,6 +7,18 @@ VFXValidator.Config = {
 		Cooldown = 0.5,
 		Damage = 20,
 		Duration = 0.5,
+	},
+	["Astel"] = {
+		MaximumRange = 200,
+		TotalMeteors = 50,
+		SpawnHeight = 50,
+		SpawnRadius = 100,
+		SpawnOffset = -40,
+		MeteorDuration = 0.8,
+		MeteorSize = 10,
+		ExplosionRadius = 12,
+		Damage = 15,
+		Cooldown = 5,
 	}
 }
 
