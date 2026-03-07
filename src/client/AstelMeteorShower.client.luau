@@ -81,7 +81,8 @@ local function createMeteorVisual(startPos: Vector3, endPos: Vector3)
 	local config = VFXValidator.Config.Astel
 
 	local portal = PortalPrefab:Clone()
-	portal:PivotTo(CFrame.new(startPos) * CFrame.Angles(math.rad(90), 0, 0))
+	local baseLookCFrame = CFrame.lookAt(startPos, endPos)
+	portal:PivotTo(baseLookCFrame * CFrame.Angles(math.rad(90), 0, 0))
 	portal.Parent = VFXFolder
 
 	local scaleValue = Instance.new("NumberValue")
