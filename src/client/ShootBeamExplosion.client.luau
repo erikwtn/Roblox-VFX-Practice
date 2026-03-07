@@ -8,16 +8,22 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 --// Dependencies
+local DamageTypes = require(ReplicatedStorage.Shared.DamageTypes)
 local VFXValidator = require(ReplicatedStorage.Shared.VFXValidator)
+
+--// Events
+local ExplosionEvent: RemoteEvent = ReplicatedStorage:WaitForChild("ShootBeamExplosionRemote")
 
 --// Constants
 local Player = Players.LocalPlayer
 local Mouse: Mouse = Player:GetMouse()
 local VFXFolder: Folder = Workspace:WaitForChild("VFX")
-local ExplosionEvent: RemoteEvent = ReplicatedStorage:WaitForChild("ShootBeamExplosionRemote")
+local Prefabs = ReplicatedStorage:WaitForChild("Prefabs")
+local ExplosionPrefab = Prefabs:FindFirstChild("Red Explosion")
+local SmokePrefab = Prefabs:FindFirstChild("Smoke1")
 
 --// Variables
-local explosionTweenInfo: TweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+local explosionTweenInfo: TweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
 local lastTimeUsed = 0
 
 --// Functions
@@ -35,7 +41,7 @@ local function createBeam(origin: Part, targetPosition: Vector3)
 	local beam: Part = Instance.new("Part")
 	beam.Shape = Enum.PartType.Cylinder
 	beam.Material = Enum.Material.Neon
-	beam.Color = Color3.new(1, 1, 1)
+	beam.Color = Color3.new(1, 0, 0)
 	beam.Anchored = true
 	beam.CanCollide = false
 	beam.CanQuery = false
@@ -45,7 +51,7 @@ local function createBeam(origin: Part, targetPosition: Vector3)
 	-- subscribe to function so loop can be stopped appropriately
 	local connection: RBXScriptConnection
 
-	-- every frame check if the timer has run out, if not it 
+	-- every frame check if the timer has run out, if not it
 	-- continues to update the beams position, size, and transparency
 	-- otherwise, disconnect
 	connection = RunService.RenderStepped:Connect(function(deltaTime: number)
@@ -65,48 +71,63 @@ local function createBeam(origin: Part, targetPosition: Vector3)
 
 		-- set the beam's size, length and transparency
 		beam.Size = Vector3.new(distance, targetThickness, targetThickness)
-		beam.CFrame = CFrame.lookAt(origin.Position, targetPosition) * CFrame.new(0, 0, -distance/2) * CFrame.Angles(0, math.rad(90), 0)
+		beam.CFrame = CFrame.lookAt(origin.Position, targetPosition)
+			* CFrame.new(0, 0, -distance / 2)
+			* CFrame.Angles(0, math.rad(90), 0)
 		beam.Transparency = targetTransparency
 	end)
 end
 
 local function createExplosion(targetPosition: Vector3)
-	-- create explosion part
-	local explosion: Part = Instance.new("Part")
-	explosion.Shape = Enum.PartType.Ball
-	explosion.Size = Vector3.new(1, 1, 1)
-	explosion.Position = targetPosition
-	explosion.Anchored = true
-	explosion.CanCollide = false
-	explosion.CanQuery = false
-	explosion.Color = Color3.new(1, 1, 1)
-	explosion.Material = Enum.Material.Neon
-	explosion.Parent = VFXFolder
+	local explosionModel: Model = ExplosionPrefab:Clone()
+	explosionModel:PivotTo(CFrame.new(targetPosition))
+	explosionModel.Parent = VFXFolder
 
-	-- create particle effect
-	local particles: ParticleEmitter = Instance.new("ParticleEmitter")
-	particles.LightEmission = 1
-	particles.Transparency = NumberSequence.new(0)
-	particles.Speed = NumberRange.new(30, 60)
-	particles.SpreadAngle = Vector2.new(-90, 90)
-	particles.Lifetime = NumberRange.new(0.2, 0.4)
-	particles.Parent = explosion
+	local mainPart = explosionModel.PrimaryPart or explosionModel:FindFirstChildWhichIsA("BasePart")
 
-	-- wait a sec to start particles
-	task.defer(function()
-		particles:Emit(50)
-	end)
+	if mainPart then
+		local particles: ParticleEmitter = SmokePrefab:Clone()
+		particles.Transparency = NumberSequence.new(0, 1)
+		particles.LockedToPart = true
+		particles.Lifetime = NumberRange.new(3)
+		particles.Parent = mainPart
 
-	-- tween explosion part larger over time
-	TweenService:Create(explosion, explosionTweenInfo, { Size = Vector3.new(20, 20, 20), Transparency = 1}):Play()
+		local sizeProxy = Instance.new("NumberValue")
+		sizeProxy.Value = 1
+		sizeProxy.Changed:Connect(function(val)
+			particles.Size = NumberSequence.new(val)
+		end)
 
-	-- mark explosion for cleanup
-	Debris:AddItem(explosion, 1)
+		task.defer(function()
+			particles:Emit(10)
+		end)
+
+		TweenService:Create(sizeProxy, explosionTweenInfo, { Value = 6 }):Play()
+		Debris:AddItem(sizeProxy, 1)
+	end
+
+	for _, mesh in pairs(explosionModel:GetChildren()) do
+		if mesh:IsA("BasePart") then
+			mesh.Anchored = true
+			mesh.CanCollide = false
+
+			mesh.CFrame = mesh.CFrame
+				* CFrame.Angles(math.rad(math.random(360)), math.rad(math.random(360)), math.rad(math.random(360)))
+
+			TweenService:Create(mesh, explosionTweenInfo, {
+				Size = mesh.Size * 2,
+				Transparency = 1,
+			}):Play()
+		end
+	end
+
+	DamageTypes.ShakeCamera(Player, 1)
+	Debris:AddItem(explosionModel, 1)
 end
 
 --// Replication
 ExplosionEvent.OnClientEvent:Connect(function(targetPosition: Vector3, originPlayer: Player)
-	if originPlayer == Player then 
+	if originPlayer == Player then
 		return
 	end
 
@@ -126,8 +147,8 @@ end)
 
 --// Input
 UserInputService.InputBegan:Connect(function(input, processed)
-	if processed or input.UserInputType ~= Enum.UserInputType.MouseButton1 then 
-		return 
+	if processed or input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+		return
 	end
 
 	if not VFXValidator.CanPerform(Player, "ShootBeamExplosion", lastTimeUsed) then
@@ -136,8 +157,8 @@ UserInputService.InputBegan:Connect(function(input, processed)
 
 	local character = Player.Character
 	local origin = character and character:FindFirstChild("Head")
-	if not origin then 
-		return 
+	if not origin then
+		return
 	end
 
 	local config = VFXValidator.Config["ShootBeamExplosion"]
@@ -147,10 +168,12 @@ UserInputService.InputBegan:Connect(function(input, processed)
 
 	Mouse.TargetFilter = VFXFolder
 	local mousePos = Mouse.Hit.Position
-	
+
 	-- clamp to range
 	local difference = (mousePos - origin.Position)
-	local targetPos = (difference.Magnitude > config.MaximumRange) and (origin.Position + difference.Unit * config.MaximumRange) or mousePos
+	local targetPos = (difference.Magnitude > config.MaximumRange)
+			and (origin.Position + difference.Unit * config.MaximumRange)
+		or mousePos
 
 	lastTimeUsed = tick()
 	createBeam(origin, targetPos)

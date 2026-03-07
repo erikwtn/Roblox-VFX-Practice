@@ -19,7 +19,7 @@ VFXValidator.Config = {
 		ExplosionRadius = 12,
 		Damage = 15,
 		Cooldown = 5,
-	}
+	},
 }
 
 --- Verify that when VFX are triggered it exists, is off cooldown and the player triggering it exists and is not dead
@@ -29,7 +29,7 @@ function VFXValidator.CanPerform(player: Player, actionName: string, lastUsedTim
 	if not config then
 		return false
 	end
-	
+
 	-- cooldown has not ended
 	if tick() - lastUsedTime < config.Cooldown then
 		return false
@@ -60,12 +60,12 @@ function VFXValidator.ValidateTarget(player: Player, actionName: string, targetP
 
 	-- head does not exist
 	local origin = character:FindFirstChild("Head")
-	if not origin then 
+	if not origin then
 		return false
 	end
 
 	local distance = (origin.Position - targetPosition).Magnitude
-	
+
 	return distance <= (config.MaximumRange + 10)
 end
 

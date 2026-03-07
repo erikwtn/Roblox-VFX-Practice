@@ -1,3 +1,4 @@
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 local DamageTypes = {}
 
@@ -20,6 +21,18 @@ function DamageTypes.ExplosionDamage(player: Player, targetPosition: Vector3, ra
 			humanoid:TakeDamage(damage)
 		end
 	end
+end
+
+-- move this somewhere else later as it is not related to damage
+function DamageTypes.ShakeCamera(player: Player, intensity: number)
+	local humanoid = player.Character.Humanoid
+	local info = TweenInfo.new(0.05, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 4, true)
+
+	local goal = {
+		CameraOffset = Vector3.new(math.random(-intensity, intensity), math.random(-intensity, intensity), 0),
+	}
+
+	TweenService:Create(humanoid, info, goal):Play()
 end
 
 return DamageTypes

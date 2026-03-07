@@ -12,29 +12,6 @@ local ExplosionEvent: RemoteEvent = ReplicatedStorage:WaitForChild("ShootBeamExp
 --// Variables
 local playerCooldowns = {}
 
-local function applyExplosionDamage(player: Player, targetPosition: Vector3)
-	local config = VFXValidator.Config.ShootBeamExplosion
-
-	-- cast an overlap radius to check what the explosion
-	local overlapParameters = OverlapParams.new()
-	overlapParameters.FilterDescendantsInstances = { player.Character }
-	overlapParameters.FilterType = Enum.RaycastFilterType.Exclude
-
-	local hits = Workspace:GetPartBoundsInRadius(targetPosition, config.ExplosionRadius, overlapParameters)
-	local damaged = {}
-
-	-- check through hits for valid targets and verify it only does damage once (in other instances there might be need for multiple hits)
-	for _, part in pairs(hits) do
-		local model = part:FindFirstAncestorOfClass("Model")
-		local humanoid = model and model:FindFirstChildOfClass("Humanoid")
-
-		if humanoid and not damaged[humanoid] then
-			damaged[humanoid] = true
-			humanoid:TakeDamage(config.Damage)
-		end
-	end
-end
-
 ExplosionEvent.OnServerEvent:Connect(function(player: Player, targetPosition: Vector3)
 	local lastTimeUsed = playerCooldowns[player] or 0
 

@@ -39,26 +39,30 @@ MeteorEvent.OnServerEvent:Connect(function(player: Player, targetPosition: Vecto
 
 	for i = 1, config.TotalMeteors do
 		local r = config.SpawnRadius
-		
+
 		local playerCFrame = root.CFrame
 		local right = playerCFrame.RightVector
 		local up = playerCFrame.UpVector
 		local look = playerCFrame.LookVector
-	
+
 		local sideShift = math.random(-r, r)
-		local heightShift = math.random(-r/2, r/2)
-	
+		local heightShift = math.random(-r / 2, r / 2)
+
 		local portalCenter = root.Position + (look * config.SpawnOffset) + (up * config.SpawnHeight)
 		local startPosition = portalCenter + (right * sideShift) + (up * heightShift)
-	
+
 		local impactPosition = targetPosition + (right * sideShift)
-	
+
 		MeteorEvent:FireAllClients(startPosition, impactPosition)
-	
+
 		task.delay(config.MeteorDuration, function()
 			DamageTypes.ExplosionDamage(player, impactPosition, config.ExplosionRadius, config.Damage)
 		end)
-	
+
 		task.wait(0.1)
 	end
+end)
+
+game:GetService("Players").PlayerRemoving:Connect(function(player)
+	playerCooldowns[player] = nil
 end)
