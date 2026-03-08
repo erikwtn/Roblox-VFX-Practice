@@ -1,6 +1,7 @@
+local ShootBeamExplosion = {}
+
 --// Services
 local Debris = game:GetService("Debris")
-local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -9,31 +10,26 @@ local TweenService = game:GetService("TweenService")
 
 --// Dependencies
 local DamageTypes = require(ReplicatedStorage.Shared.DamageTypes)
-local VFXValidator = require(ReplicatedStorage.Shared.VFXValidator)
-
---// Events
-local ExplosionEvent: RemoteEvent = ReplicatedStorage:WaitForChild("ShootBeamExplosionRemote")
 
 --// Constants
-local Player = Players.LocalPlayer
-local Mouse: Mouse = Player:GetMouse()
 local VFXFolder: Folder = Workspace:WaitForChild("VFX")
-local Prefabs = ReplicatedStorage:WaitForChild("Prefabs")
+local Prefabs: Folder = ReplicatedStorage:WaitForChild("Prefabs")
 local ExplosionPrefab = Prefabs:FindFirstChild("Red Explosion")
 local SmokePrefab = Prefabs:FindFirstChild("Smoke1")
 
 --// Variables
 local explosionTweenInfo: TweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
-local lastTimeUsed = 0
+ShootBeamExplosion.Config = {
+	MaximumRange = 100,
+	ExplosionRadius = 10,
+	Cooldown = 0.5,
+	Damage = 20,
+	Duration = 0.5,
+}
 
 --// Functions
 local function createBeam(origin: Part, targetPosition: Vector3)
 	if not origin or not targetPosition then
-		return
-	end
-
-	local config = VFXValidator.Config["ShootBeamExplosion"]
-	if not config then
 		return
 	end
 
@@ -58,7 +54,7 @@ local function createBeam(origin: Part, targetPosition: Vector3)
 		timeElapsed += deltaTime
 
 		-- check if timer ran out or origin stops existing, if so stop loop
-		if timeElapsed > config.Duration or not origin or not origin.Parent then
+		if timeElapsed > ShootBeamExplosion.Config.Duration or not origin or not origin.Parent then
 			connection:Disconnect()
 			beam:Destroy()
 			return
@@ -66,8 +62,8 @@ local function createBeam(origin: Part, targetPosition: Vector3)
 
 		-- calculate the size, length and transparency of the beam depending on time elapsed
 		local distance: number = (origin.Position - targetPosition).Magnitude
-		local targetTransparency: number = timeElapsed / config.Duration
-		local targetThickness: number = 0.8 * (1 - (timeElapsed / config.Duration))
+		local targetTransparency: number = timeElapsed / ShootBeamExplosion.Config.Duration
+		local targetThickness: number = 0.8 * (1 - (timeElapsed / ShootBeamExplosion.Config.Duration))
 
 		-- set the beam's size, length and transparency
 		beam.Size = Vector3.new(distance, targetThickness, targetThickness)
@@ -121,21 +117,48 @@ local function createExplosion(targetPosition: Vector3)
 		end
 	end
 
-	DamageTypes.ShakeCamera(Player, 1)
+	DamageTypes.ShakeCamera(Players.LocalPlayer, 1)
 	Debris:AddItem(explosionModel, 1)
 end
 
---// Replication
-ExplosionEvent.OnClientEvent:Connect(function(targetPosition: Vector3, originPlayer: Player)
-	if originPlayer == Player then
+function ShootBeamExplosion:Init()
+	local Player = Players.LocalPlayer
+	local character = Player.Character
+	local origin = character and character:FindFirstChild("Head")
+
+	if not origin then
 		return
 	end
 
-	local character = originPlayer.Character
-	if not character then
+	local Mouse = Player:GetMouse()
+
+	Mouse.TargetFilter = VFXFolder
+	local mousePos = Mouse.Hit.Position
+
+	-- clamp to range
+	local difference = (mousePos - origin.Position)
+	local targetPos = (difference.Magnitude > ShootBeamExplosion.Config.MaximumRange)
+			and (origin.Position + difference.Unit * ShootBeamExplosion.Config.MaximumRange)
+		or mousePos
+
+	return {
+		TargetPosition = targetPos,
+	}
+end
+
+function ShootBeamExplosion:Run(player: Player, character: Model, props: { any })
+	local targetPosition = props.TargetPosition
+	if not targetPosition then
 		return
 	end
 
+	--// server
+	if RunService:IsServer() then
+		DamageTypes.ExplosionDamage(player, targetPosition, ShootBeamExplosion.Config.ExplosionRadius, ShootBeamExplosion.Config.Damage)
+		return
+	end
+
+	--// client
 	local origin: Part = character:FindFirstChild("Head")
 	if not origin then
 		return
@@ -143,40 +166,6 @@ ExplosionEvent.OnClientEvent:Connect(function(targetPosition: Vector3, originPla
 
 	createBeam(origin, targetPosition)
 	createExplosion(targetPosition)
-end)
+end
 
---// Input
-UserInputService.InputBegan:Connect(function(input, processed)
-	if processed or input.UserInputType ~= Enum.UserInputType.MouseButton1 then
-		return
-	end
-
-	if not VFXValidator.CanPerform(Player, "ShootBeamExplosion", lastTimeUsed) then
-		return
-	end
-
-	local character = Player.Character
-	local origin = character and character:FindFirstChild("Head")
-	if not origin then
-		return
-	end
-
-	local config = VFXValidator.Config["ShootBeamExplosion"]
-	if not config then
-		return
-	end
-
-	Mouse.TargetFilter = VFXFolder
-	local mousePos = Mouse.Hit.Position
-
-	-- clamp to range
-	local difference = (mousePos - origin.Position)
-	local targetPos = (difference.Magnitude > config.MaximumRange)
-			and (origin.Position + difference.Unit * config.MaximumRange)
-		or mousePos
-
-	lastTimeUsed = tick()
-	createBeam(origin, targetPos)
-	createExplosion(targetPos)
-	ExplosionEvent:FireServer(targetPos)
-end)
+return ShootBeamExplosion
